@@ -1,5 +1,6 @@
 // CG HW1 - Environment side
-
+import * as THREE from "./js/three.module.js";
+import { OrbitControls } from "./js/OrbitControls.js";
 let scene, camera, renderer;
 let controls;
 
@@ -10,7 +11,7 @@ start();
 loop();
 
 function start() {
-  scene = new THREE.Scene();
+ scene = new THREE.Scene();
 
   camera = new THREE.PerspectiveCamera(
     60,
@@ -30,30 +31,27 @@ function start() {
   document.body.appendChild(renderer.domElement);
 
   // Orbit controls (requirement)
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 2, 0);
   controls.enableDamping = true;
 
   window.addEventListener("resize", onResize);
 
   // background first so we don't stare at black
+  
   setupSky();
 
-  // I’m loading textures first, then building the scene.
-  // (Had some 404 issues at first, so I kept paths simple.)
-  loadTextures(() => {
-    makeGroundAndRoad();
-    makeHouses();
-    placeTrees();
-    placeLamps();
-
+  
     // debugging helper while placing stuff:
     // scene.add(new THREE.AxesHelper(5));
-  });
+  
 
   // temporary light just so we can see objects while building.
   // Partner will add the proper "sun" DirectionalLight.
   scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.position.set(10, 20, 10);
+scene.add(sun);
 }
 
 function setupSky() {
@@ -66,22 +64,37 @@ function setupSky() {
   scene.background = sky;
 }
 
-function loadTextures(done) {
-  const tl = new THREE.TextureLoader();
+// --- load textures, THEN build the scene (but don't silently fail) ---
+loadTexturesAndBuild();
 
-  // grass (repeat a lot so it doesn't look stretched)
-  grassTex = tl.load("./textures/grass.jpg", done);
-  grassTex.wrapS = grassTex.wrapT = THREE.RepeatWrapping;
-  grassTex.repeat.set(12, 12);
+function loadTexturesAndBuild() {
+  const manager = new THREE.LoadingManager(
+    () => {
+      console.log("✅ Texture loading finished (including any errors). Building scene...");
+      makeGroundAndRoad();
+      makeHouses();
+      placeTrees();
+      placeLamps();
+      camera.lookAt(0, 2, 0);
+    }
+  );
 
-  // road
-  roadTex = tl.load("./textures/road.jpg");
-  roadTex.wrapS = roadTex.wrapT = THREE.RepeatWrapping;
-  roadTex.repeat.set(1, 8);
+  manager.onError = (url) => {
+    console.error("❌ Failed to load:", url);
+  };
 
-  // bricks for buildings
+  const tl = new THREE.TextureLoader(manager);
+
+  grassTex = tl.load("./textures/grass.jpg");
+  roadTex  = tl.load("./textures/road.jpg");
   brickTex = tl.load("./textures/brick.jpg");
-  brickTex.wrapS = brickTex.wrapT = THREE.RepeatWrapping;
+
+  // set wrapping/repeat (safe even if textures fail)
+  [grassTex, roadTex, brickTex].forEach((t) => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  });
+  grassTex.repeat.set(12, 12);
+  roadTex.repeat.set(1, 8);
   brickTex.repeat.set(2, 1);
 }
 
